@@ -71,6 +71,8 @@ from colabfold.relax import relax_me
 from Bio.PDB import MMCIFParser, PDBParser, MMCIF2Dict
 from Bio.PDB.PDBIO import Select
 
+from metfish.representation_manipulation import modify_representations
+
 # logging settings
 logger = logging.getLogger(__name__)
 import jax
@@ -342,6 +344,7 @@ def predict_structure(
     save_single_representations: bool = False,
     save_pair_representations: bool = False,
     save_recycles: bool = False,
+    modification_method: str = "none"
 ):
     """Predicts structure using AlphaFold for the given sequence."""
 
@@ -415,13 +418,21 @@ def predict_structure(
                     del unrelaxed_protein
 
             return_representations = save_all or save_single_representations or save_pair_representations
+            
+            # manipulate intermediate results
+            def manipulation_callback(prev):
+                print(f'Modifying structural representation')
+                prev = modify_representations(prev, method=modification_method, job_name=files.prefix)
+
+                return prev
 
             # predict
             result, recycles = \
             model_runner.predict(input_features,
                 random_seed=seed,
                 return_representations=return_representations,
-                callback=callback)
+                callback=callback,
+                manipulation_callback=manipulation_callback)
 
             prediction_times.append(time.time() - start)
 
@@ -1259,6 +1270,7 @@ def run(
     local_pdb_path: Optional[Path] = None,
     use_cluster_profile: bool = True,
     feature_dict_callback: Callable[[Any], Any] = None,
+    modification_method: str = "none",
     **kwargs
 ):
     # check what device is available
@@ -1313,7 +1325,7 @@ def run(
     max_msa               = kwargs.pop("max_msa",None)
     if max_msa is not None:
         max_seq, max_extra_seq = [int(x) for x in max_msa.split(":")]
-
+    
     if kwargs.pop("use_amber", False) and num_relax == 0:
         num_relax = num_models * num_seeds
 
@@ -1592,6 +1604,7 @@ def run(
                     save_single_representations=save_single_representations,
                     save_pair_representations=save_pair_representations,
                     save_recycles=save_recycles,
+                    modification_method=modification_method,
                 )
                 result_files += results["result_files"]
                 ranks.append(results["rank"])
@@ -1839,6 +1852,14 @@ def main():
         help="Experimental: For multimer models, disable cluster profiles.",
     )
     pred_group.add_argument("--data", help="Path to AlphaFold2 weights directory.")
+    pred_group.add_argument(
+        "--modification_method",
+        help="Modify representations by: none, reinitialize, add_noise, replace_conformer. "
+        "Modifies representations as part of the recyclying process",
+        type=str,
+        default="none",
+        choices=["none", "reinitialize", "add_noise", "replace_conformer"],
+    )
 
     relax_group = parser.add_argument_group("Relaxation arguments", "")
     relax_group.add_argument(
@@ -2061,6 +2082,7 @@ def main():
         use_gpu_relax = args.use_gpu_relax,
         save_all=args.save_all,
         save_recycles=args.save_recycles,
+        modification_method=args.modification_method,
     )
 
 if __name__ == "__main__":
