@@ -421,7 +421,6 @@ def predict_structure(
             
             # manipulate intermediate results
             def manipulation_callback(prev):
-                print(f'Modifying structural representation')
                 prev = modify_representations(prev, method=modification_method, job_name=files.prefix)
 
                 return prev
@@ -1854,11 +1853,11 @@ def main():
     pred_group.add_argument("--data", help="Path to AlphaFold2 weights directory.")
     pred_group.add_argument(
         "--modification_method",
-        help="Modify representations by: none, reinitialize, add_noise, replace_conformer. "
+        help="Modify representations by: none, reinitialize, add_noise, replace_structure."
         "Modifies representations as part of the recyclying process",
         type=str,
         default="none",
-        choices=["none", "reinitialize", "add_noise", "replace_conformer"],
+        choices=["none", "reinitialize", "add_noise", "replace_structure"],
     )
 
     relax_group = parser.add_argument_group("Relaxation arguments", "")
